@@ -1,7 +1,6 @@
 import pygame
+import fonts
 
-# --- ZUSTÄNDE ---
-# menu, brightness, security, placeholder, about, factory_reset_confirm
 settings_state = "menu"
 settings_selected_index = 0
 
@@ -17,12 +16,12 @@ settings_menu_items = [
     "Werkseinstellungen",
 ]
 
-# Items, die technisch noch nicht angebunden sind (warten auf Hardware)
 PLACEHOLDER_ITEMS = {"Ton", "Netzwerk", "WLAN", "Datum & Uhrzeit", "Akku"}
 
-# --- ECHTE FUNKTIONEN ---
-brightness = 70          # 0-100, später an ST7789-Backlight-PWM koppeln
-is_locked = False        # Tastensperre an/aus
+brightness = 70
+is_locked = False
+
+exit_to_menu = False
 
 NAVI_UP = pygame.K_UP
 NAVI_DOWN = pygame.K_DOWN
@@ -31,7 +30,6 @@ C_KEY = pygame.K_BACKSPACE
 
 
 def get_brightness():
-    """Für main.py/Hardware-Layer: aktuellen Helligkeitswert (0-100) abfragen."""
     return brightness
 
 
@@ -40,18 +38,20 @@ def get_locked():
 
 
 def reset():
-    global settings_state, settings_selected_index
+    global settings_state, settings_selected_index, exit_to_menu
     settings_state = "menu"
     settings_selected_index = 0
+    exit_to_menu = False
 
 
-def handle_event(event, global_state):
-    global settings_state, settings_selected_index, brightness, is_locked
+def handle_event(event):
+    global settings_state, settings_selected_index, brightness, is_locked, exit_to_menu
 
     if event.type != pygame.KEYDOWN:
-        return global_state  # Wenn keine Taste gedrückt wird, Status einfach zurückgeben
+        return
 
-    # --- HAUPTMENÜ DER EINSTELLUNGEN ---
+    exit_to_menu = False
+
     if settings_state == "menu":
         if event.key == NAVI_UP:
             settings_selected_index = (settings_selected_index - 1) % len(settings_menu_items)
@@ -69,14 +69,9 @@ def handle_event(event, global_state):
                 settings_state = "factory_reset_confirm"
             elif chosen in PLACEHOLDER_ITEMS:
                 settings_state = "placeholder"
-        
         elif event.key == C_KEY:
-            # HIER IST DER TRICK: Wenn wir im Hauptmenü der Settings "C" drücken,
-            # schicken wir "menu" an die main.py zurück, um die App zu beenden!
-            settings_state = "menu"
-            return "menu"
+            exit_to_menu = True
 
-    # --- HELLIGKEIT (funktional) ---
     elif settings_state == "brightness":
         if event.key == NAVI_UP:
             brightness = min(100, brightness + 10)
@@ -85,74 +80,74 @@ def handle_event(event, global_state):
         elif event.key == C_KEY or event.key in NAVI_SELECT:
             settings_state = "menu"
 
-    # --- SICHERHEIT / TASTENSPERRE (funktional) ---
     elif settings_state == "security":
         if event.key in NAVI_SELECT:
             is_locked = not is_locked
         elif event.key == C_KEY:
             settings_state = "menu"
 
-    # --- PLATZHALTER FÜR NOCH FEHLENDE HARDWARE ---
     elif settings_state == "placeholder":
         if event.key == C_KEY or event.key in NAVI_SELECT:
             settings_state = "menu"
 
-    # --- ÜBER DAS TELEFON ---
     elif settings_state == "about":
         if event.key == C_KEY or event.key in NAVI_SELECT:
             settings_state = "menu"
 
-    # --- WERKSEINSTELLUNGEN BESTÄTIGEN ---
     elif settings_state == "factory_reset_confirm":
         if event.key in NAVI_SELECT:
-            # Platzhalter für Lösch-Logik
             settings_state = "menu"
         elif event.key == C_KEY:
             settings_state = "menu"
 
-    # Am Ende schicken wir den Status zurück an die main.py
-    return global_state
 
-
-def draw_softkey_hints(screen, font, text_color, left_text, right_text):
+def draw_softkey_hints(screen, text_color, left_text, right_text):
     WIDTH = screen.get_width()
     HEIGHT = screen.get_height()
     if left_text:
-        screen.blit(font.render(left_text, True, text_color), (4, HEIGHT - 14))
+        screen.blit(fonts.render(left_text, 16, text_color), (4, HEIGHT - 14))
     if right_text:
-        surf = font.render(right_text, True, text_color)
+        surf = fonts.render(right_text, 16, text_color)
         rect = surf.get_rect(topright=(WIDTH - 4, HEIGHT - 14))
         screen.blit(surf, rect)
 
 
-def draw_screen(screen, font, text_color, bg_color):
+def draw_screen(screen, text_color, bg_color):
+    """main.py ruft das jetzt als app_settings.draw_screen(screen, BLACK, NOKIA_BG) auf."""
     screen.fill(bg_color)
     WIDTH = screen.get_width()
     HEIGHT = screen.get_height()
-    hint_font = pygame.font.Font(None, 16)
 
     if settings_state == "menu":
-        title = font.render("Einstellungen", True, text_color)
-        screen.blit(title, (4, 4))
+        screen.blit(fonts.render("Einstellungen", 20, text_color), (4, 4))
         pygame.draw.line(screen, text_color, (0, 18), (WIDTH, 18), 2)
 
-        for i, item in enumerate(settings_menu_items):
-            item_y = 26 + (i * 18)
+        # --- NEU: Das scrollbare Einstellungs-Fenster (max. 6 Einträge gleichzeitig) ---
+        MAX_VISIBLE = 6
+        start_idx = 0
+        if settings_selected_index > 5:
+            start_idx = settings_selected_index - 5
+        if start_idx > max(0, len(settings_menu_items) - MAX_VISIBLE):
+            start_idx = max(0, len(settings_menu_items) - MAX_VISIBLE)
+
+        for i in range(start_idx, min(len(settings_menu_items), start_idx + MAX_VISIBLE)):
+            item_y = 22 + ((i - start_idx) * 20)
+            item = settings_menu_items[i]
+            
             if i == settings_selected_index:
-                pygame.draw.rect(screen, text_color, (2, item_y - 2, WIDTH - 4, 16))
-                surf = font.render(item, True, bg_color)
+                pygame.draw.rect(screen, text_color, (2, item_y - 2, WIDTH - 4, 18))
+                surf = fonts.render(item, 20, bg_color)
             else:
-                surf = font.render(item, True, text_color)
+                surf = fonts.render(item, 20, text_color)
             screen.blit(surf, (6, item_y))
 
-        draw_softkey_hints(screen, hint_font, text_color, "C:Zurück", "Navi:OK")
+        draw_softkey_hints(screen, text_color, "C:Zurück", "Navi:OK")
 
     elif settings_state == "brightness":
-        title = font.render("Anzeige", True, text_color)
-        screen.blit(title, (4, 4))
+        screen.blit(fonts.render("Anzeige", 20, text_color), (4, 4))
         pygame.draw.line(screen, text_color, (0, 18), (WIDTH, 18), 2)
 
-        label = font.render(f"Helligkeit: {brightness}%", True, text_color)
+        label = fonts.render(f"Helligkeit: {brightness}%", 20, text_color)
         screen.blit(label, (6, 40))
 
         bar_x, bar_y, bar_w, bar_h = 10, 60, WIDTH - 20, 10
@@ -160,49 +155,39 @@ def draw_screen(screen, font, text_color, bg_color):
         fill_w = int((bar_w - 4) * (brightness / 100))
         pygame.draw.rect(screen, text_color, (bar_x + 2, bar_y + 2, fill_w, bar_h - 4))
 
-        draw_softkey_hints(screen, hint_font, text_color, "Navi:+/-", "C:Fertig")
+        draw_softkey_hints(screen, text_color, "Navi:+/-", "C:Fertig")
 
     elif settings_state == "security":
-        title = font.render("Sicherheit", True, text_color)
-        screen.blit(title, (4, 4))
+        screen.blit(fonts.render("Sicherheit", 20, text_color), (4, 4))
         pygame.draw.line(screen, text_color, (0, 18), (WIDTH, 18), 2)
 
         status = "AN" if is_locked else "AUS"
-        label = font.render(f"Tastensperre: {status}", True, text_color)
-        screen.blit(label, (6, 40))
+        screen.blit(fonts.render(f"Tastensperre: {status}", 20, text_color), (6, 40))
 
-        draw_softkey_hints(screen, hint_font, text_color, "C:Zurück", "Navi:Toggle")
+        draw_softkey_hints(screen, text_color, "C:Zurück", "Navi:Toggle")
 
     elif settings_state == "placeholder":
         chosen = settings_menu_items[settings_selected_index]
-        title = font.render(chosen, True, text_color)
-        screen.blit(title, (4, 4))
+        screen.blit(fonts.render(chosen, 20, text_color), (4, 4))
         pygame.draw.line(screen, text_color, (0, 18), (WIDTH, 18), 2)
 
-        msg_font = pygame.font.Font(None, 18)
-        msg = msg_font.render("Noch nicht verfügbar", True, text_color)
-        screen.blit(msg, (6, 40))
-        msg2 = msg_font.render("(Hardware fehlt noch)", True, text_color)
-        screen.blit(msg2, (6, 58))
+        screen.blit(fonts.render("Noch nicht verfügbar", 18, text_color), (6, 40))
+        screen.blit(fonts.render("(Hardware fehlt noch)", 18, text_color), (6, 58))
 
-        draw_softkey_hints(screen, hint_font, text_color, "C:Zurück", "")
+        draw_softkey_hints(screen, text_color, "C:Zurück", "")
 
     elif settings_state == "about":
-        title = font.render("Über das Telefon", True, text_color)
-        screen.blit(title, (4, 4))
+        screen.blit(fonts.render("Über das Telefon", 20, text_color), (4, 4))
         pygame.draw.line(screen, text_color, (0, 18), (WIDTH, 18), 2)
 
-        info_font = pygame.font.Font(None, 16)
-        lines = ["Project 5110", "Radxa Zero 3W", "Firmware: v0.1-dev"]
-        for i, line in enumerate(lines):
-            surf = info_font.render(line, True, text_color)
-            screen.blit(surf, (6, 30 + i * 16))
+        for i, line in enumerate(["Project 5110", "Radxa Zero 3W", "Firmware: v0.1-dev"]):
+            screen.blit(fonts.render(line, 16, text_color), (6, 30 + i * 16))
 
-        draw_softkey_hints(screen, hint_font, text_color, "C:Zurück", "")
+        draw_softkey_hints(screen, text_color, "C:Zurück", "")
 
     elif settings_state == "factory_reset_confirm":
-        title = font.render("Wirklich löschen?", True, text_color)
+        title = fonts.render("Wirklich löschen?", 20, text_color)
         title_rect = title.get_rect(center=(WIDTH // 2, HEIGHT // 2 - 10))
         screen.blit(title, title_rect)
 
-        draw_softkey_hints(screen, hint_font, text_color, "C:Nein", "Navi:Ja")
+        draw_softkey_hints(screen, text_color, "C:Nein", "Navi:Ja")

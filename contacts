@@ -1,7 +1,0 @@
-def load_contacts():
-    try:
-        with open("contacts.json", "r", encoding="utf-8") as f:
-            return json.load(f)
-    except FileNotFoundError:
-        # Wenn noch keine Datei existiert, geben wir eine leere Liste zurück
-        return []
