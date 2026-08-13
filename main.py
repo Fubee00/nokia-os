@@ -2,6 +2,7 @@ import pygame
 import sys
 import app_phone
 import app_whatsapp
+import app_settings
 
 pygame.init()
 
@@ -86,6 +87,9 @@ while running:
                         current_state = "phone"
                     elif menu_items[selected_index] == "WhatsApp":
                         current_state = "whatsapp"
+
+                    elif menu_items[selected_index] == "Optionen":
+                        current_state = "settings"
                 
                 # --- DIREKT AUS DEM HAUPTMENÜ NUMMER WÄHLEN ---
                 elif event.unicode.isnumeric():
@@ -98,6 +102,9 @@ while running:
             # --- STEUERUNG IN DEN APPS ---
             elif current_state == "phone":
                 app_phone.handle_event(event)
+
+            elif current_state == "settings":
+                current_state = app_settings.handle_event(event, current_state)
 
     # --- BILDER ZEICHNEN ---
     if current_state == "menu":
@@ -145,6 +152,10 @@ while running:
         
     elif current_state == "whatsapp":
         app_whatsapp.draw_screen(screen, font, BLACK, NOKIA_BG)
+
+    elif current_state == "settings":
+        app_settings.draw_screen(screen, font, BLACK, NOKIA_BG)
+      
 
     pygame.display.flip()
 
